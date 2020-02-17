@@ -61,6 +61,8 @@ class Crc:
 class SmlParserError(Exception):
     pass
 
+class SmlChecksumError(Exception):
+    pass
 
 class SmlSequence(dict):
     def __init__(self, fields: tuple, values: list) -> None:
@@ -401,7 +403,6 @@ class SmlBase:
     @staticmethod
     def parse_frame(buf: bytes) -> Tuple[int, Optional[SmlFrame]]:
         start = 0
-        end = 0
 
         for match in SmlBase.__PATTERN.finditer(buf):
             if match.start() > start:
@@ -411,12 +412,13 @@ class SmlBase:
 
             frame = match.group(0)
             padding = frame[-3]
-            if padding < 4 and Crc.verify_fcs(frame):
-                obj = SmlFrame(SmlBase.__unescape(frame[8:-8-padding]))
-                return [match.end(), obj]
 
-            start = match.start()
-            assert match.end() > end
-            end = match.end()
+            #returns the position of the end of the match only if checksum fail
+            if not Crc.verify_fcs(frame) or padding >= 4:
+                return match.end()
 
-        return [end]
+            obj = SmlFrame(SmlBase.__unescape(frame[8:-8-padding]))
+            return [match.end(), obj]
+
+        #returns none if there are no matches (signal continue)
+        return None
